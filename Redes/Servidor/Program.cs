@@ -5,24 +5,21 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-class Jogador
-{
+class Jogador{
     public string Nome { get; set; }
     public IPEndPoint EndPoint { get; set; }
     public int Pontuacao { get; set; } = 0;
     public bool Finalizou { get; set; } = false;
 }
 
-class Servidor
-{
+class Servidor{
     static UdpClient server;
     static List<Jogador> jogadores = new List<Jogador>();
     static int maxJogadores = -1;
     static bool partidaIniciada = false;
     static Random rand = new Random();
 
-    static void Main()
-    {
+    static void Main(){
         server = new UdpClient(5000);
         Console.WriteLine("Servidor aguardando configuração na porta 5000...");
 
@@ -30,10 +27,8 @@ class Servidor
         receiveThread.Start();
     }
 
-    static void ReceberMensagens()
-    {
-        while (true)
-        {
+    static void ReceberMensagens(){
+        while (true){
             IPEndPoint clienteEP = new IPEndPoint(IPAddress.Any, 0);
             byte[] data = server.Receive(ref clienteEP);
             string mensagem = Encoding.UTF8.GetString(data);
@@ -43,34 +38,27 @@ class Servidor
         }
     }
 
-    static void ProcessarMensagem(string msg, IPEndPoint cliente)
-    {
-        if (msg.StartsWith("CONFIG:") && !partidaIniciada && maxJogadores == -1)
-        {
+    static void ProcessarMensagem(string msg, IPEndPoint cliente){
+        if (msg.StartsWith("CONFIG:") && !partidaIniciada && maxJogadores == -1){
             string[] partes = msg.Split(':');
-            if (partes.Length == 3 && int.TryParse(partes[2], out int qtd))
-            {
+            if (partes.Length == 3 && int.TryParse(partes[2], out int qtd)){
                 maxJogadores = qtd;
                 jogadores.Add(new Jogador { Nome = partes[1], EndPoint = cliente });
                 Enviar("MENSAGEM:Você configurou a partida. Aguardando outros jogadores...", cliente);
                 Console.WriteLine($"{partes[1]} configurou a partida para {qtd} jogadores.");
             }
-            else
-            {
+            else{
                 Enviar("MENSAGEM:Erro ao configurar partida. Use CONFIG:<nome>:<quantidade>", cliente);
             }
         }
-        else if (msg.StartsWith("ENTRAR:") && !partidaIniciada)
-        {
-            if (maxJogadores == -1)
-            {
+        else if (msg.StartsWith("ENTRAR:") && !partidaIniciada){
+            if (maxJogadores == -1){
                 Enviar("MENSAGEM:Partida ainda não configurada. Aguarde o primeiro jogador.", cliente);
                 return;
             }
 
             string nome = msg.Substring(7);
-            if (!JogadorExiste(cliente))
-            {
+            if (!JogadorExiste(cliente)){
                 jogadores.Add(new Jogador { Nome = nome, EndPoint = cliente });
                 Enviar($"MENSAGEM:Bem-vindo {nome}! Aguardando mais jogadores...", cliente);
                 Console.WriteLine($"{nome} entrou na partida.");
@@ -79,17 +67,14 @@ class Servidor
                     IniciarPartida();
             }
         }
-        else if (msg == "PEDIR_CARTA")
-        {
+        else if (msg == "PEDIR_CARTA"){
             Jogador jogador = ObterJogador(cliente);
             if (jogador != null && !jogador.Finalizou)
                 EnviarCarta(jogador);
         }
-        else if (msg == "PARAR")
-        {
+        else if (msg == "PARAR"){
             Jogador jogador = ObterJogador(cliente);
-            if (jogador != null)
-            {
+            if (jogador != null){
                 jogador.Finalizou = true;
                 Enviar($"MENSAGEM:{jogador.Nome} parou com {jogador.Pontuacao} pontos.", cliente);
                 VerificarFimRodada();
@@ -97,61 +82,49 @@ class Servidor
         }
     }
 
-    static void IniciarPartida()
-    {
+    static void IniciarPartida(){
         partidaIniciada = true;
         Broadcast($"MENSAGEM:Partida iniciada com {maxJogadores} jogadores!");
-        foreach (var jogador in jogadores)
-        {
+        foreach (var jogador in jogadores){
             EnviarCarta(jogador);
         }
     }
 
-    static void VerificarFimRodada()
-    {
+    static void VerificarFimRodada(){
         bool todosFinalizaram = true;
-        foreach (var jogador in jogadores)
-        {
-            if (!jogador.Finalizou && jogador.Pontuacao <= 21)
-            {
+        foreach (var jogador in jogadores){
+            if (!jogador.Finalizou && jogador.Pontuacao <= 21){
                 todosFinalizaram = false;
                 break;
             }
         }
 
-        if (todosFinalizaram)
-        {
+        if (todosFinalizaram){
             EncerrarRodada();
         }
     }
 
-    static void EncerrarRodada()
-    {
+    static void EncerrarRodada(){
         Broadcast("MENSAGEM:Rodada encerrada. Resultados:");
 
         int maiorPontuacao = -1;
         List<string> campeoes = new List<string>();
 
-        foreach (var jogador in jogadores)
-        {
+        foreach (var jogador in jogadores){
             string resultado;
 
-            if (jogador.Pontuacao > 21)
-            {
+            if (jogador.Pontuacao > 21){
                 resultado = "Perdeu (Estourou 21)";
             }
-            else
-            {
+            else{
                 resultado = $"Parou com {jogador.Pontuacao} pontos";
 
-                if (jogador.Pontuacao > maiorPontuacao)
-                {
+                if (jogador.Pontuacao > maiorPontuacao){
                     maiorPontuacao = jogador.Pontuacao;
                     campeoes.Clear();
                     campeoes.Add(jogador.Nome);
                 }
-                else if (jogador.Pontuacao == maiorPontuacao)
-                {
+                else if (jogador.Pontuacao == maiorPontuacao){
                     campeoes.Add(jogador.Nome);
                 }
             }
@@ -159,16 +132,13 @@ class Servidor
             Enviar($"RESULTADO:{jogador.Nome}:{resultado}", jogador.EndPoint);
         }
 
-        if (campeoes.Count == 0)
-        {
+        if (campeoes.Count == 0){
             Broadcast("MENSAGEM:Ninguém venceu! Todos estouraram 21.");
         }
-        else if (campeoes.Count == 1)
-        {
+        else if (campeoes.Count == 1){
             Broadcast($"MENSAGEM:🏆 Campeão da rodada: {campeoes[0]} com {maiorPontuacao} pontos!");
         }
-        else
-        {
+        else{
             Broadcast($"MENSAGEM:🏆 Empate! Campeões da rodada: {string.Join(", ", campeoes)} com {maiorPontuacao} pontos!");
         }
 
@@ -178,8 +148,7 @@ class Servidor
         Console.WriteLine("Servidor pronto para nova configuração.");
     }
 
-    static void EnviarCarta(Jogador jogador)
-    {
+    static void EnviarCarta(Jogador jogador){
         int carta = rand.Next(1, 11);
         jogador.Pontuacao += carta;
         Enviar($"CARTA:{carta} TOTAL:{jogador.Pontuacao}", jogador.EndPoint);
@@ -191,20 +160,17 @@ class Servidor
         }
     }
 
-    static void Enviar(string mensagem, IPEndPoint cliente)
-    {
+    static void Enviar(string mensagem, IPEndPoint cliente){
         byte[] data = Encoding.UTF8.GetBytes(mensagem);
         server.Send(data, data.Length, cliente);
     }
 
-    static void Broadcast(string mensagem)
-    {
+    static void Broadcast(string mensagem){
         foreach (var jogador in jogadores)
             Enviar(mensagem, jogador.EndPoint);
     }
 
-    static Jogador ObterJogador(IPEndPoint cliente)
-    {
+    static Jogador ObterJogador(IPEndPoint cliente){
         foreach (var jogador in jogadores)
             if (jogador.EndPoint.Equals(cliente))
                 return jogador;
